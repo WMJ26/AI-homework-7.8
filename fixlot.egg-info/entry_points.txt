@@ -1,0 +1,3 @@
+[console_scripts]
+fixlot = fixlot.cli.main:main
+fixlot-web = fixlot.webui.app:main
