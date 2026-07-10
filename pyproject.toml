@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fixlot"
+version = "0.1.0"
+description = "A test-driven self-correcting Coding Agent Harness"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "fixlot team"}
+]
+dependencies = [
+    "openai>=1.0.0",
+    "anthropic>=0.30.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "flask>=3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+fixlot = "fixlot.cli.main:main"
+fixlot-web = "fixlot.webui.app:main"
+
+[tool.setuptools.packages.find]
+include = ["fixlot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
