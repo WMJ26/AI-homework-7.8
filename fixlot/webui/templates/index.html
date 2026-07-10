@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>fixlot — Coding Agent Harness</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .container { max-width: 800px; width: 100%; }
+        h1 { color: #58a6ff; margin-bottom: 0.5rem; font-size: 1.8rem; }
+        .subtitle { color: #8b949e; margin-bottom: 2rem; font-size: 0.95rem; }
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        label { display: block; margin-bottom: 0.5rem; color: #c9d1d9; font-weight: 500; }
+        textarea, input, select {
+            width: 100%;
+            padding: 0.75rem;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 0.95rem;
+            font-family: inherit;
+            margin-bottom: 1rem;
+        }
+        textarea { min-height: 100px; resize: vertical; }
+        .row { display: flex; gap: 1rem; }
+        .row > * { flex: 1; }
+        button {
+            background: #238636;
+            color: #fff;
+            border: 1px solid #2ea043;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        button:hover { background: #2ea043; }
+        button:disabled { background: #30363d; border-color: #30363d; cursor: not-allowed; }
+        .result-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+        .result-card h3 { margin-bottom: 0.75rem; }
+        .state-passed { color: #3fb950; }
+        .state-error, .state-max_retries { color: #f85149; }
+        .state-running { color: #d29922; }
+        pre {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 1rem;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .dot-running { background: #d29922; animation: pulse 1s infinite; }
+        .dot-completed { background: #3fb950; }
+        .dot-error { background: #f85149; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>fixlot</h1>
+        <p class="subtitle">A test-driven self-correcting Coding Agent Harness</p>
+
+        <div class="card">
+            <label for="task">Task Description</label>
+            <textarea id="task" placeholder="e.g. Implement a function that adds two numbers and passes the tests">Implement a function that adds two numbers</textarea>
+
+            <div class="row">
+                <div>
+                    <label for="dir">Working Directory</label>
+                    <input type="text" id="dir" value=".">
+                </div>
+                <div>
+                    <label for="provider">LLM Provider</label>
+                    <select id="provider">
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="max_rounds">Max Rounds</label>
+                    <input type="number" id="max_rounds" value="5" min="1" max="20">
+                </div>
+            </div>
+
+            <button id="run-btn" onclick="runTask()">Run Task</button>
+        </div>
+
+        <div id="result" style="display: none;">
+            <div id="result-content"></div>
+        </div>
+    </div>
+
+    <script>
+        async function runTask() {
+            const btn = document.getElementById('run-btn');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+
+            const resultDiv = document.getElementById('result');
+            const contentDiv = document.getElementById('result-content');
+            resultDiv.style.display = 'block';
+            contentDiv.innerHTML = '<div class="result-card"><span class="status-dot dot-running"></span>Running task...</div>';
+
+            try {
+                const resp = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        task: document.getElementById('task').value,
+                        dir: document.getElementById('dir').value,
+                        provider: document.getElementById('provider').value,
+                        max_rounds: parseInt(document.getElementById('max_rounds').value),
+                    })
+                });
+                const data = await resp.json();
+
+                if (data.error) {
+                    contentDiv.innerHTML = `<div class="result-card"><h3 class="state-error">Error</h3><pre>${data.error}</pre></div>`;
+                    btn.disabled = false;
+                    btn.textContent = 'Run Task';
+                    return;
+                }
+
+                pollStatus(data.task_id);
+            } catch (e) {
+                contentDiv.innerHTML = `<div class="result-card"><h3 class="state-error">Error</h3><pre>${e.message}</pre></div>`;
+                btn.disabled = false;
+                btn.textContent = 'Run Task';
+            }
+        }
+
+        async function pollStatus(taskId) {
+            const contentDiv = document.getElementById('result-content');
+            for (let i = 0; i < 120; i++) {
+                try {
+                    const resp = await fetch(`/api/status/${taskId}`);
+                    const data = await resp.json();
+
+                    if (data.status === 'completed') {
+                        const r = data.result;
+                        const stateClass = r.passed ? 'state-passed' : 'state-error';
+                        const dotClass = r.passed ? 'dot-completed' : 'dot-error';
+                        contentDiv.innerHTML = `
+                            <div class="result-card">
+                                <h3><span class="status-dot ${dotClass}"></span>${r.state}</h3>
+                                <p>Rounds: ${r.total_rounds}/${r.max_rounds}</p>
+                                <p class="${stateClass}">${r.passed ? 'All tests passed!' : 'Tests did not pass.'}</p>
+                            </div>`;
+                        document.getElementById('run-btn').disabled = false;
+                        document.getElementById('run-btn').textContent = 'Run Task';
+                        return;
+                    } else if (data.status === 'error') {
+                        contentDiv.innerHTML = `<div class="result-card"><h3 class="state-error">Error</h3><pre>${data.error}</pre></div>`;
+                        document.getElementById('run-btn').disabled = false;
+                        document.getElementById('run-btn').textContent = 'Run Task';
+                        return;
+                    }
+                } catch (e) {
+                    contentDiv.innerHTML = `<div class="result-card"><h3 class="state-error">Polling Error</h3><pre>${e.message}</pre></div>`;
+                    document.getElementById('run-btn').disabled = false;
+                    document.getElementById('run-btn').textContent = 'Run Task';
+                    return;
+                }
+                await new Promise(r => setTimeout(r, 2000));
+            }
+            contentDiv.innerHTML = '<div class="result-card"><h3 class="state-error">Timeout</h3><p>Task took too long.</p></div>';
+            document.getElementById('run-btn').disabled = false;
+            document.getElementById('run-btn').textContent = 'Run Task';
+        }
+    </script>
+</body>
+</html>
