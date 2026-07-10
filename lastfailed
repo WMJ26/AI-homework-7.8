@@ -1,0 +1,4 @@
+{
+  "tests/test_cli.py::TestCreateParser::test_no_task_shows_help": true,
+  "tests/test_cli.py::TestCreateParser::test_description": true
+}

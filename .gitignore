@@ -1,13 +1,2 @@
-.env
-__pycache__/
-*.pyc
-*.pyo
-dist/
-build/
-*.egg-info/
-.eggs/
-.pytest_cache/
-.fixlot/
-*.spec
-*.exe
-*.app
+# Created by pytest automatically.
+*
