@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: fixlot
+    env: python
+    buildCommand: pip install -e .
+    startCommand: python -m fixlot.webui.app
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

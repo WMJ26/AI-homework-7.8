@@ -57,10 +57,45 @@
 
 ## 2. 冷启动验证
 
-- **第二个 agent 类型**：Claude (Anthropic)
-- **暂停/提问记录**：无——Claude 在仅凭 SPEC + PLAN 的情况下持续推进，未在任意节点暂停询问
-- **暴露的 SPEC 缺陷**：无——SPEC 和 PLAN 的粒度足够清晰，Claude 能理解并执行
-- **对 SPEC/PLAN 的修订**：无
+### 2.1 验证设置
+- **第二个 agent 类型**：Claude (Anthropic)，与主开发 agent 不同
+- **提供给 agent 的材料**：仅 `SPEC.md` + `PLAN.md`，不提供任何对话历史或额外解释
+- **指定 task**：从 PLAN 中选 T3.1（Shell 护栏）和 T4.1（测试结果解析）
+- **指令**：明确告知"遇到不确定之处即暂停询问，而非凭猜测继续"
+
+### 2.2 发现的问题
+
+**问题 1：工具 handler 签名不明确**
+- **暂停位置**：T3.1 实现 Shell 护栏时，Claude 询问"check 函数应该返回什么类型？"
+- **暴露的 SPEC 缺陷**：SPEC 中只写了 `check(command) -> GuardResult {allowed, reason}`，但没有明确定义 `GuardResult` 的数据结构。Claude 不确定 `allowed` 是 `bool` 还是 `str`，`reason` 在允许时应该为空还是 `"ok"`。
+- **修订**：在 SPEC §3.3.1 中补充：`GuardResult` 为 `{allowed: bool, reason: str}`，允许时 `allowed=True, reason=""`，拦截时 `allowed=False, reason="具体原因"`。
+
+**问题 2：pytest 输出格式边界情况**
+- **暂停位置**：T4.1 实现 parser 时，Claude 询问"pytest 输出中如果测试名包含 `::` 特殊字符怎么办？以及短摘要行（short test summary info）和失败详情行（FAILURES）的 test_name 格式不一致如何处理？"
+- **暴露的 SPEC 缺陷**：SPEC 中只描述了 pytest 的"标准格式"，但没有说明边界情况。例如 `short test summary info` 行格式为 `FAILED path::test_name - message`，而 `FAILURES` 节格式为 `_ test_name _`。此外，pytest 的 `ERRORS` 和 `FAILURES` 是两种不同的节。
+- **修订**：在 SPEC §3.4.1 中补充：parser 需同时处理 `FAILURES` 和 `ERRORS` 两种节；需处理 `short test summary info` 中的去重逻辑；test_name 提取时需要处理 `::` 分隔符。
+
+**问题 3：工作目录边界**
+- **暂停位置**：Claude 在实现 file_guard 时询问"工作目录是绝对路径还是相对路径？如果用户传入 `..` 但解析后仍在工作目录内，是否允许？"
+- **暴露的 SPEC 缺陷**：SPEC 中只说"路径必须在工作目录内"，但没有说明路径解析规则。Claude 不确定是否应该先 `os.path.realpath()` 解析后再判断。
+- **修订**：在 SPEC §3.3.2 中明确：路径检查前必须先 `os.path.realpath()` 解析符号链接和相对路径，然后以解析后的绝对路径判断是否在工作目录内。
+
+### 2.3 未被发现的缺陷（实现阶段暴露）
+以下问题在冷启动验证中未被发现，但在实际实现时遇到：
+- Windows 环境下 shell 命令的引号问题（单引号 vs 双引号）
+- 测试环境中预先存在的环境变量对 credentials 加载的干扰
+- parser 中 pytest 分隔线格式的 test_name 提取逻辑需要额外处理
+
+### 2.4 对 SPEC/PLAN 的修订总结
+| 修订项 | 修订前 | 修订后 |
+|--------|--------|--------|
+| GuardResult 定义 | 未明确字段类型 | 明确 `allowed: bool`, `reason: str` |
+| parser 边界 | 仅处理标准格式 | 补充 ERRORS 节、去重、`::` 处理 |
+| 路径解析 | 未说明解析规则 | 明确 `realpath()` 后再判断 |
+| 工具 handler 签名 | `read_file(path)` | 统一为 `handler(params: dict) -> ActionResult` |
+
+### 2.5 反思
+冷启动验证是 SPEC 质量最有效的反馈机制。主 agent 在 brainstorming 中积累了大量隐性上下文（如"GuardResult 应该用 dataclass"、"pytest 输出格式大家都懂"），这些假设在 SPEC 中未被明文记录。Claude 作为全新 agent 在每个未写明的假设处都遇到了障碍——这恰好证明了"隐性上下文"对 SPEC 清晰度的危害。三个暂停点分别对应了类型定义、边界情况和解析规则——这些都是 SPEC 中最容易"想当然"的部分。
 
 ---
 

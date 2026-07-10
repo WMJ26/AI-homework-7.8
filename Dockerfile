@@ -12,4 +12,8 @@ COPY tests/ tests/
 
 RUN pip install --no-cache-dir -e .
 
-ENTRYPOINT ["python", "-m", "fixlot"]
+EXPOSE 5000
+
+ENV FIXLOT_MODE=cli
+
+ENTRYPOINT ["sh", "-c", "if [ \"$FIXLOT_MODE\" = \"web\" ]; then python -m fixlot.webui.app; else python -m fixlot \"$@\"; fi", "--"]

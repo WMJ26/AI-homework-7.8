@@ -92,6 +92,17 @@
 - **测试**: 5 tests, 全部通过
 - **人工干预**: 无
 
+### [Fix] 作业要求补充修复
+- **提交**: (pending)
+- **内容**:
+  1. 创建 `.gitlab-ci.yml`（GitLab CI 格式，unit-test job）
+  2. 更新 `Dockerfile` 支持 CLI/Web 双模式（FIXLOT_MODE 环境变量）
+  3. 创建 `render.yaml` 一键部署配置
+  4. 更新 `PLAN.md` 所有 task 标记完成状态 + commit hash
+  5. 充实 `SPEC_PROCESS.md` 冷启动验证（补充 3 个具体暂停点 + 修订记录）
+  6. 更新 `README.md` 增加部署说明、Docker WebUI 模式、目录结构/安全边界中文标题
+- **人工干预**: 全部人工修复
+
 ---
 
 ## 统计
